@@ -14,6 +14,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,400&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
 <!-- Chart.js + jsPDF loaded lazily when needed -->
+<!-- OneSignal Push Notifications (FREE - background push) -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  // Replace YOUR_APP_ID with your OneSignal App ID from onesignal.com
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.ONESIGNAL_APP_ID = "0f032edc-8666-47ec-887b-0087ea8d5c6d"; // ← User fills this
+  OneSignalDeferred.push(async function(OneSignal) {
+    if(window.ONESIGNAL_APP_ID === "0f032edc-8666-47ec-887b-0087ea8d5c6d") return; // not configured yet
+    await OneSignal.init({
+      appId: window.ONESIGNAL_APP_ID,
+      notifyButton: { enable: false }, // we use our own UI
+      allowLocalhostAsSecureOrigin: false,
+    });
+    window._osReady = true;
+    window._oneSignal = OneSignal;
+  });
+</script>
 <style>
 /* ═══════════════════════════ DESIGN TOKENS ═══════════════════════════ */
 :root{
@@ -905,14 +922,73 @@ textarea.field{resize:none;min-height:68px}
         <button id="mode-btn-s" onclick="toggleMode()" class="mode-btn">🚀 Pro</button>
       </div>
     </div>
+    <!-- REAL PUSH NOTIFICATIONS -->
     <div class="ss">
-      <div class="ss-title">🔔 Reminders</div>
+      <div class="ss-title">🔔 Real Push Notifications <span style="background:var(--gd);color:var(--green);font-size:10px;padding:2px 7px;border-radius:8px;font-weight:700;margin-left:4px;">BROWSER BAND PE BHI</span></div>
+      <div style="background:linear-gradient(135deg,rgba(74,222,128,.08),rgba(96,165,250,.06));border:1px solid rgba(74,222,128,.2);border-radius:var(--r);padding:16px;margin-bottom:10px;">
+        <div style="font-size:13px;color:var(--text2);line-height:1.8;margin-bottom:12px;">
+          <strong style="color:var(--text);">OneSignal se FREE real notifications milti hain</strong> — chahe app band ho, browser band ho.<br>
+          <span style="font-size:12px;">👇 Neeche App ID daalo aur enable karo:</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" class="field" id="os-appid-input" placeholder="OneSignal App ID paste karo..." style="flex:1;min-height:auto;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;">
+          <button onclick="saveOSAppId()" style="padding:10px 14px;background:var(--green);border:none;border-radius:8px;color:#0d0f14;font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Save</button>
+        </div>
+        <div id="os-status" style="font-size:12px;margin-bottom:8px;color:var(--text3);">⚪ App ID nahi diya — setup guide padho</div>
+        <button id="os-sub-btn" onclick="osSubscribe()" style="display:none;width:100%;padding:11px;background:linear-gradient(135deg,var(--gold2),var(--gold));border:none;border-radius:var(--rs);color:#0d0f14;font-family:'DM Sans',sans-serif;font-weight:800;font-size:14px;cursor:pointer;">🔔 Notifications Enable Karo</button>
+        <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3);line-height:1.8;">
+          <strong style="color:var(--text2);">Setup kaise karein?</strong><br>
+          1️⃣ <a href="https://onesignal.com" target="_blank" style="color:var(--blue);">onesignal.com</a> pe FREE account banao<br>
+          2️⃣ "New App" → "Web Push" select karo<br>
+          3️⃣ Site URL daalo: <code style="color:var(--gold);">studysparkai29-arch.github.io/Dailycore</code><br>
+          4️⃣ App ID copy karke upar paste karo → Save
+        </div>
+      </div>
+    </div>
+
+    <!-- PRACTICE / STUDY NOTIFICATIONS -->
+    <div class="ss">
+      <div class="ss-title">📚 Practice Reminders <span style="font-size:10px;color:var(--text3);font-weight:400;">Study schedule set karo</span></div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;">
+        <div style="margin-bottom:14px;">
+          <div class="fl" style="margin-bottom:8px;">Study sessions kab kab chahiye?</div>
+          <div id="practice-times-list" style="margin-bottom:8px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="time" id="new-practice-time" class="ttime" value="09:00" style="width:auto;">
+            <input type="text" id="new-practice-label" class="field" placeholder="e.g. RAS Study, Maths" style="flex:1;min-width:120px;min-height:auto;padding:9px 12px;font-size:13px;">
+            <button onclick="addPracticeTime()" style="padding:9px 16px;background:var(--gl);border:1.5px solid var(--gold);border-radius:8px;color:var(--gold);font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;cursor:pointer;">+</button>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div class="fl" style="margin-bottom:6px;">Kaunse din?</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;" id="practice-days">
+            <button class="day-btn active" data-day="0" onclick="togglePracticeDay(this)">Mon</button>
+            <button class="day-btn active" data-day="1" onclick="togglePracticeDay(this)">Tue</button>
+            <button class="day-btn active" data-day="2" onclick="togglePracticeDay(this)">Wed</button>
+            <button class="day-btn active" data-day="3" onclick="togglePracticeDay(this)">Thu</button>
+            <button class="day-btn active" data-day="4" onclick="togglePracticeDay(this)">Fri</button>
+            <button class="day-btn active" data-day="5" onclick="togglePracticeDay(this)">Sat</button>
+            <button class="day-btn active" data-day="6" onclick="togglePracticeDay(this)">Sun</button>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div class="fl" style="margin-bottom:6px;">Notification Message</div>
+          <input type="text" class="field" id="practice-msg" value="📚 Study time! Aaj ka session shuru karo 🎯" style="width:100%;">
+        </div>
+        <button class="btn2" onclick="savePracticeSettings()" style="width:100%;">✅ Practice Schedule Save Karo</button>
+        <div id="practice-status" style="font-size:12px;color:var(--text3);margin-top:8px;text-align:center;min-height:16px;"></div>
+      </div>
+    </div>
+
+    <!-- DIARY REMINDERS -->
+    <div class="ss">
+      <div class="ss-title">📔 Diary Reminders</div>
       <div class="srow"><div class="sicon">🌅</div><div class="sinfo"><div class="sname">Morning Reminder</div></div><input type="time" class="ttime" id="r-morning" value="07:00"></div>
       <div class="srow"><div class="sicon">🌙</div><div class="sinfo"><div class="sname">Evening Reminder</div></div><input type="time" class="ttime" id="r-evening" value="21:00"></div>
       <div class="srow"><div class="sicon">⚠️</div><div class="sinfo"><div class="sname">Last Call Reminder</div></div><input type="time" class="ttime" id="r-last" value="22:30"></div>
       <div class="srow"><div class="sicon">📅</div><div class="sinfo"><div class="sname">Weekly Review (Sunday)</div></div><label class="toggle"><input type="checkbox" id="tog-weekly" checked><span class="tt"></span></label></div>
-      <button class="btn2" onclick="saveSettings()" style="margin-top:6px;">✅ Settings Save Karo</button>
-      <div class="notif-hint">⚠️ Reminders tab kaam karte hain jab browser mein tab khula ho. Best experience ke liye Chrome pe <strong>"Add to Home Screen"</strong> karo.</div>
+      <button class="btn2" onclick="saveSettings()" style="margin-top:6px;">✅ Diary Settings Save Karo</button>
+
     </div>
     <div class="ss">
       <div class="ss-title">📊 Stats</div>
@@ -1152,6 +1228,7 @@ function init() {
   },200);
   restorePinState();
   checkMilestone(calcStreak());
+  initPracticeSchedule();
   showSplash();
 }
 
@@ -2356,17 +2433,74 @@ function installPWA() {
 }
 
 // ═══════════════════════════════════════
-//  NOTIFICATIONS
+//  NOTIFICATIONS — OneSignal powered
+//  Browser band ho tab bhi kaam karta hai ✅
 // ═══════════════════════════════════════
 function checkNotif() {
-  if('Notification' in window && Notification.permission==='default'){const nbBanner=g('notif-banner');if(nbBanner)nbBanner.style.display='flex';}
+  if('Notification' in window && Notification.permission==='default'){
+    const nbBanner=g('notif-banner'); if(nbBanner)nbBanner.style.display='flex';
+  }
+  setTimeout(osInitUI, 1500); // init OneSignal UI
 }
+
+function osInitUI() {
+  const notCfg=g('os-not-configured'), cfg=g('os-configured'); if(!notCfg||!cfg) return;
+  if(window.ONESIGNAL_APP_ID==='0f032edc-8666-47ec-887b-0087ea8d5c6d'){
+    notCfg.style.display='block'; cfg.style.display='none';
+  } else {
+    notCfg.style.display='none'; cfg.style.display='block';
+    if(window._oneSignal && window._oneSignal.User?.PushSubscription?.optedIn) osShowEnabled();
+    else osShowDisabled();
+  }
+}
+
+function osShowEnabled(){
+  const btn=g('os-enable-btn'), info=g('os-enabled-info');
+  if(btn) btn.style.display='none'; if(info) info.style.display='block';
+  const icon=g('os-status-icon'), desc=g('os-status-desc');
+  if(icon) icon.textContent='✅';
+  if(desc) desc.textContent='Notifications ON — browser band ho tab bhi aayegi!';
+}
+function osShowDisabled(){
+  const btn=g('os-enable-btn'), info=g('os-enabled-info');
+  if(btn) btn.style.display='block'; if(info) info.style.display='none';
+}
+
+async function osEnableNotif(){
+  if(!window._oneSignal){ toast('OneSignal load nahi hua — page refresh karo','error'); return; }
+  try {
+    await window._oneSignal.Notifications.requestPermission();
+    if(window._oneSignal.Notifications.permission){
+      osShowEnabled(); osSetSchedule();
+      toast('✅ Notifications ON! Kal se reminders aayenge 🔔','gold');
+    } else { toast('Browser ne block kiya — Settings → Notifications mein allow karo','error'); }
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function osSetSchedule(){
+  if(!window._oneSignal) return;
+  const s=S.settings||{};
+  try {
+    window._oneSignal.User.addTags({
+      morning_time: s.morningTime||'07:00',
+      evening_time: s.eveningTime||'21:00',
+      last_time:    s.lastTime||'22:30',
+      timezone:     Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata',
+      active:'true'
+    });
+  } catch(_){}
+}
+
 async function reqNotif() {
-  if(!('Notification' in window))return;
+  if(!('Notification' in window)) return;
+  const nbEl=g('notif-banner'); if(nbEl)nbEl.style.display='none';
+  if(window.ONESIGNAL_APP_ID!=='0f032edc-8666-47ec-887b-0087ea8d5c6d' && window._oneSignal){
+    await osEnableNotif(); return;
+  }
+  // Fallback: basic browser notification
   const p=await Notification.requestPermission();
-  const nbEl=g('notif-banner');if(nbEl)nbEl.style.display='none';
-  if(p==='granted'){toast('🔔 Notifications ON! Reminders aayenge','success');registerSW();}
-  else toast('Notifications block hain — browser settings mein allow karo','error');
+  if(p==='granted') toast('🔔 Notifications ON! (Tab khula rehna zaroori hai)','success');
+  else toast('Notifications block hain — Settings mein allow karo','error');
 }
 
 // ═══════════════════════════════════════
@@ -2464,7 +2598,213 @@ function addRipple(e) {
 // ═══════════════════════════════════════
 //  START
 // ═══════════════════════════════════════
+// ═══════════════════════════════════════
+//  ONESIGNAL + PRACTICE NOTIFICATIONS
+// ═══════════════════════════════════════
+
+// Expose nav for OneSignal click handler
+window.DC_NAV = nav;
+
+// Save OneSignal App ID and init
+function saveOSAppId() {
+  const inp = g('os-appid-input');
+  const id = inp?.value.trim();
+  if (!id || id.length < 10) { toast('Valid App ID daalo!', 'error'); return; }
+  localStorage.setItem('dc_os_appid', id);
+  toast('✅ App ID saved! Initializing...', 'success');
+  initOneSignal(id);
+  setTimeout(updateOSUI, 2000);
+}
+
+function updateOSUI() {
+  const statusEl = g('os-status');
+  const subBtn = g('os-sub-btn');
+  const savedId = localStorage.getItem('dc_os_appid');
+  
+  // Populate input if saved
+  const inp = g('os-appid-input');
+  if (inp && savedId && !inp.value) inp.value = savedId;
+  
+  if (!savedId) {
+    if (statusEl) { statusEl.textContent = '⚪ App ID nahi diya — setup guide padho'; statusEl.style.color = 'var(--text3)'; }
+    if (subBtn) subBtn.style.display = 'none';
+    return;
+  }
+  
+  if (!window._osReady) {
+    if (statusEl) { statusEl.textContent = '⏳ OneSignal load ho rahi hai...'; statusEl.style.color = 'var(--gold)'; }
+    if (subBtn) subBtn.style.display = 'none';
+    return;
+  }
+  
+  // Check subscription status
+  if (window.OneSignalDeferred) {
+    window.OneSignalDeferred.push(async (OS) => {
+      const opted = await OS.User.PushSubscription.optedIn;
+      if (statusEl) {
+        statusEl.textContent = opted
+          ? '✅ Notifications ON — browser band ho tab bhi aayegi!'
+          : '⚠️ Subscribe karo neeche se';
+        statusEl.style.color = opted ? 'var(--green)' : 'var(--gold)';
+      }
+      if (subBtn) {
+        subBtn.style.display = 'block';
+        subBtn.textContent = opted ? '🔕 Notifications OFF Karo' : '🔔 Notifications Enable Karo';
+        subBtn.style.background = opted ? 'var(--rd)' : 'linear-gradient(135deg,var(--gold2),var(--gold))';
+        subBtn.style.color = opted ? 'var(--red)' : '#0d0f14';
+      }
+    });
+  }
+}
+
+function osSubscribe() {
+  if (!window._osReady) {
+    toast('Pehle App ID save karo!', 'error');
+    return;
+  }
+  window.OneSignalDeferred.push(async (OS) => {
+    const opted = await OS.User.PushSubscription.optedIn;
+    if (opted) {
+      await OS.User.PushSubscription.optOut();
+      toast('🔕 Notifications OFF', 'error');
+    } else {
+      await OS.Notifications.requestPermission();
+      await OS.User.PushSubscription.optIn();
+      toast('🔔 Notifications ON! Browser band pe bhi aayegi!', 'success');
+      confetti();
+    }
+    setTimeout(updateOSUI, 500);
+  });
+}
+
+// ─── PRACTICE SCHEDULE ────────────────
+function renderPracticeTimes() {
+  const list = g('practice-times-list');
+  if (!list) return;
+  const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
+  if (!times.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0;">Koi session nahi add kiya abhi — neeche + se add karo</div>';
+    return;
+  }
+  list.innerHTML = times.map((t, i) => `
+    <div class="pt-item">
+      <span class="pt-time">${t.time}</span>
+      <span class="pt-label">${t.label}</span>
+      <button class="pt-del" onclick="removePracticeTime(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addPracticeTime() {
+  const time = g('new-practice-time')?.value;
+  const label = g('new-practice-label')?.value.trim() || 'Study Session';
+  if (!time) { toast('Time select karo!', 'error'); return; }
+  const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
+  if (times.some(t => t.time === time)) { toast('Yeh time already hai!', 'error'); return; }
+  times.push({ time, label });
+  times.sort((a, b) => a.time.localeCompare(b.time));
+  localStorage.setItem('dc_practice_times', JSON.stringify(times));
+  if (g('new-practice-label')) g('new-practice-label').value = '';
+  renderPracticeTimes();
+  toast(`✅ ${label} (${time}) added!`, 'success');
+}
+
+function removePracticeTime(idx) {
+  const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
+  times.splice(idx, 1);
+  localStorage.setItem('dc_practice_times', JSON.stringify(times));
+  renderPracticeTimes();
+  toast('Session removed', 'error');
+}
+
+function togglePracticeDay(btn) {
+  btn.classList.toggle('active');
+}
+
+function savePracticeSettings() {
+  // Save active days
+  const days = [...document.querySelectorAll('.day-btn.active')].map(b => parseInt(b.dataset.day));
+  const msg = g('practice-msg')?.value || 'Study time! Aaj ka session shuru karo 🎯';
+  localStorage.setItem('dc_practice_days', JSON.stringify(days));
+  localStorage.setItem('dc_practice_msg', msg);
+  
+  // Schedule all practice notifications
+  schedulePracticeNotifications();
+  
+  const ps = g('practice-status');
+  const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
+  if (ps) {
+    if (!times.length) {
+      ps.textContent = '⚠️ Koi session nahi — upar + se add karo pehle';
+      ps.style.color = 'var(--gold)';
+    } else {
+      ps.textContent = `✅ ${times.length} sessions scheduled — ${days.length} din/week`;
+      ps.style.color = 'var(--green)';
+    }
+  }
+  toast('✅ Practice schedule saved!', 'success');
+}
+
+function schedulePracticeNotifications() {
+  // For browser-open notifications (SW based)
+  const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
+  const days = JSON.parse(localStorage.getItem('dc_practice_days') || '[0,1,2,3,4,5,6]');
+  const msg = localStorage.getItem('dc_practice_msg') || '📚 Study time! Aaj ka session shuru karo 🎯';
+  
+  if (!times.length) return;
+  if (Notification.permission !== 'granted') {
+    toast('Pehle notifications allow karo!', 'error');
+    reqNotif();
+    return;
+  }
+  
+  const now = new Date();
+  const todayDow = (now.getDay() + 6) % 7; // 0=Mon
+  
+  times.forEach(({ time, label }) => {
+    const [h2, mi] = time.split(':').map(Number);
+    const target = new Date(now);
+    target.setHours(h2, mi, 0, 0);
+    const delay = target - now;
+    
+    // Today — if time is in future and today is active day
+    if (delay > 0 && delay < 86400000 && days.includes(todayDow)) {
+      const title = `📚 ${label}`;
+      const body = msg;
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'NOTIF', delay, title, body });
+      } else {
+        setTimeout(() => new Notification(title, { body, tag: `practice-${time}`, renotify: true, icon: '/favicon.ico' }), delay);
+      }
+    }
+  });
+}
+
+// Restore practice settings when settings screen opens
+function restorePracticeUI() {
+  renderPracticeTimes();
+  const days = JSON.parse(localStorage.getItem('dc_practice_days') || '[0,1,2,3,4,5,6]');
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    const d = parseInt(btn.dataset.day);
+    btn.classList.toggle('active', days.includes(d));
+  });
+  const msg = localStorage.getItem('dc_practice_msg');
+  if (msg && g('practice-msg')) g('practice-msg').value = msg;
+  updateOSUI();
+  
+  // Reschedule every time settings opens (daily refresh)
+  schedulePracticeNotifications();
+}
+
+// ─── Init daily practice schedule (called on app start) ────
+function initPracticeSchedule() {
+  const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
+  if (times.length && Notification.permission === 'granted') {
+    schedulePracticeNotifications();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', init);
+
 </script>
 </body>
 </html>
