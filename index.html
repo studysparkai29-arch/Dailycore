@@ -17,18 +17,21 @@
 <!-- OneSignal Push Notifications (FREE - background push) -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
-  // Replace YOUR_APP_ID with your OneSignal App ID from onesignal.com
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  window.ONESIGNAL_APP_ID = "0f032edc-8666-47ec-887b-0087ea8d5c6d"; // ← User fills this
+  // App ID hardcoded — users sirf "Enable" click karein
+  window.ONESIGNAL_APP_ID = "0f032edc-8666-47ec-887b-0087ea8d5c6d";
+  
   OneSignalDeferred.push(async function(OneSignal) {
-    if(window.ONESIGNAL_APP_ID === "0f032edc-8666-47ec-887b-0087ea8d5c6d") return; // not configured yet
-    await OneSignal.init({
-      appId: window.ONESIGNAL_APP_ID,
-      notifyButton: { enable: false }, // we use our own UI
-      allowLocalhostAsSecureOrigin: false,
-    });
-    window._osReady = true;
-    window._oneSignal = OneSignal;
+    try {
+      await OneSignal.init({
+        appId: window.ONESIGNAL_APP_ID,
+        notifyButton: { enable: false },
+        allowLocalhostAsSecureOrigin: false,
+      });
+      window._osReady = true;
+      window._oneSignal = OneSignal;
+      setTimeout(function(){ if(window._osUpdateUI) window._osUpdateUI(); }, 600);
+    } catch(err) { console.warn('OneSignal init error:', err); }
   });
 </script>
 <style>
@@ -925,24 +928,21 @@ textarea.field{resize:none;min-height:68px}
     <!-- REAL PUSH NOTIFICATIONS -->
     <div class="ss">
       <div class="ss-title">🔔 Real Push Notifications <span style="background:var(--gd);color:var(--green);font-size:10px;padding:2px 7px;border-radius:8px;font-weight:700;margin-left:4px;">BROWSER BAND PE BHI</span></div>
-      <div style="background:linear-gradient(135deg,rgba(74,222,128,.08),rgba(96,165,250,.06));border:1px solid rgba(74,222,128,.2);border-radius:var(--r);padding:16px;margin-bottom:10px;">
-        <div style="font-size:13px;color:var(--text2);line-height:1.8;margin-bottom:12px;">
-          <strong style="color:var(--text);">OneSignal se FREE real notifications milti hain</strong> — chahe app band ho, browser band ho.<br>
-          <span style="font-size:12px;">👇 Neeche App ID daalo aur enable karo:</span>
+      <div style="background:linear-gradient(135deg,rgba(74,222,128,.08),rgba(96,165,250,.06));border:1px solid rgba(74,222,128,.2);border-radius:var(--r);padding:18px;margin-bottom:10px;">
+        <div id="os-status" style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.7;">
+          ⏳ Loading notification system...
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <input type="text" class="field" id="os-appid-input" placeholder="OneSignal App ID paste karo..." style="flex:1;min-height:auto;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;">
-          <button onclick="saveOSAppId()" style="padding:10px 14px;background:var(--green);border:none;border-radius:8px;color:#0d0f14;font-family:'DM Sans',sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Save</button>
+        <button id="os-sub-btn" onclick="osSubscribe()" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--gold2),var(--gold));border:none;border-radius:var(--rs);color:#0d0f14;font-family:'DM Sans',sans-serif;font-weight:800;font-size:15px;cursor:pointer;display:none;">
+          🔔 Notifications Enable Karo
+        </button>
+        <div id="os-on-msg" style="display:none;text-align:center;padding:12px;background:var(--gd);border-radius:var(--rs);">
+          <div style="font-size:20px;margin-bottom:4px;">✅</div>
+          <div style="font-weight:700;color:var(--green);font-size:14px;">Notifications ON!</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Browser band ho tab bhi reminder aayega</div>
         </div>
-        <div id="os-status" style="font-size:12px;margin-bottom:8px;color:var(--text3);">⚪ App ID nahi diya — setup guide padho</div>
-        <button id="os-sub-btn" onclick="osSubscribe()" style="display:none;width:100%;padding:11px;background:linear-gradient(135deg,var(--gold2),var(--gold));border:none;border-radius:var(--rs);color:#0d0f14;font-family:'DM Sans',sans-serif;font-weight:800;font-size:14px;cursor:pointer;">🔔 Notifications Enable Karo</button>
-        <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3);line-height:1.8;">
-          <strong style="color:var(--text2);">Setup kaise karein?</strong><br>
-          1️⃣ <a href="https://onesignal.com" target="_blank" style="color:var(--blue);">onesignal.com</a> pe FREE account banao<br>
-          2️⃣ "New App" → "Web Push" select karo<br>
-          3️⃣ Site URL daalo: <code style="color:var(--gold);">studysparkai29-arch.github.io/Dailycore</code><br>
-          4️⃣ App ID copy karke upar paste karo → Save
-        </div>
+        <button id="os-off-btn" onclick="osUnsubscribe()" style="display:none;width:100%;padding:10px;background:transparent;border:1px solid var(--border);border-radius:var(--rs);color:var(--text3);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;margin-top:8px;">
+          🔕 Notifications band karo
+        </button>
       </div>
     </div>
 
@@ -2433,73 +2433,26 @@ function installPWA() {
 }
 
 // ═══════════════════════════════════════
-//  NOTIFICATIONS — OneSignal powered
-//  Browser band ho tab bhi kaam karta hai ✅
+//  NOTIFICATIONS — Unified system
+//  OneSignal (browser band pe bhi) + fallback
 // ═══════════════════════════════════════
 function checkNotif() {
   if('Notification' in window && Notification.permission==='default'){
     const nbBanner=g('notif-banner'); if(nbBanner)nbBanner.style.display='flex';
   }
-  setTimeout(osInitUI, 1500); // init OneSignal UI
-}
-
-function osInitUI() {
-  const notCfg=g('os-not-configured'), cfg=g('os-configured'); if(!notCfg||!cfg) return;
-  if(window.ONESIGNAL_APP_ID==='0f032edc-8666-47ec-887b-0087ea8d5c6d'){
-    notCfg.style.display='block'; cfg.style.display='none';
-  } else {
-    notCfg.style.display='none'; cfg.style.display='block';
-    if(window._oneSignal && window._oneSignal.User?.PushSubscription?.optedIn) osShowEnabled();
-    else osShowDisabled();
-  }
-}
-
-function osShowEnabled(){
-  const btn=g('os-enable-btn'), info=g('os-enabled-info');
-  if(btn) btn.style.display='none'; if(info) info.style.display='block';
-  const icon=g('os-status-icon'), desc=g('os-status-desc');
-  if(icon) icon.textContent='✅';
-  if(desc) desc.textContent='Notifications ON — browser band ho tab bhi aayegi!';
-}
-function osShowDisabled(){
-  const btn=g('os-enable-btn'), info=g('os-enabled-info');
-  if(btn) btn.style.display='block'; if(info) info.style.display='none';
-}
-
-async function osEnableNotif(){
-  if(!window._oneSignal){ toast('OneSignal load nahi hua — page refresh karo','error'); return; }
-  try {
-    await window._oneSignal.Notifications.requestPermission();
-    if(window._oneSignal.Notifications.permission){
-      osShowEnabled(); osSetSchedule();
-      toast('✅ Notifications ON! Kal se reminders aayenge 🔔','gold');
-    } else { toast('Browser ne block kiya — Settings → Notifications mein allow karo','error'); }
-  } catch(e){ toast('Error: '+e.message,'error'); }
-}
-
-function osSetSchedule(){
-  if(!window._oneSignal) return;
-  const s=S.settings||{};
-  try {
-    window._oneSignal.User.addTags({
-      morning_time: s.morningTime||'07:00',
-      evening_time: s.eveningTime||'21:00',
-      last_time:    s.lastTime||'22:30',
-      timezone:     Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata',
-      active:'true'
-    });
-  } catch(_){}
+  // Register global UI update fn so OneSignal init can call it
+  window._osUpdateUI = updateOSUI;
+  setTimeout(updateOSUI, 800);
 }
 
 async function reqNotif() {
   if(!('Notification' in window)) return;
   const nbEl=g('notif-banner'); if(nbEl)nbEl.style.display='none';
-  if(window.ONESIGNAL_APP_ID!=='0f032edc-8666-47ec-887b-0087ea8d5c6d' && window._oneSignal){
-    await osEnableNotif(); return;
+  if(window._osReady){
+    osSubscribe(); return;
   }
-  // Fallback: basic browser notification
   const p=await Notification.requestPermission();
-  if(p==='granted') toast('🔔 Notifications ON! (Tab khula rehna zaroori hai)','success');
+  if(p==='granted'){ toast('🔔 Notifications ON!','success'); schedulePracticeNotifications(); }
   else toast('Notifications block hain — Settings mein allow karo','error');
 }
 
@@ -2602,78 +2555,73 @@ function addRipple(e) {
 //  ONESIGNAL + PRACTICE NOTIFICATIONS
 // ═══════════════════════════════════════
 
-// Expose nav for OneSignal click handler
-window.DC_NAV = nav;
-
-// Save OneSignal App ID and init
-function saveOSAppId() {
-  const inp = g('os-appid-input');
-  const id = inp?.value.trim();
-  if (!id || id.length < 10) { toast('Valid App ID daalo!', 'error'); return; }
-  localStorage.setItem('dc_os_appid', id);
-  toast('✅ App ID saved! Initializing...', 'success');
-  initOneSignal(id);
-  setTimeout(updateOSUI, 2000);
-}
+// ─── OneSignal UI ─────────────────
 
 function updateOSUI() {
   const statusEl = g('os-status');
   const subBtn = g('os-sub-btn');
-  const savedId = localStorage.getItem('dc_os_appid');
-  
-  // Populate input if saved
-  const inp = g('os-appid-input');
-  if (inp && savedId && !inp.value) inp.value = savedId;
-  
-  if (!savedId) {
-    if (statusEl) { statusEl.textContent = '⚪ App ID nahi diya — setup guide padho'; statusEl.style.color = 'var(--text3)'; }
-    if (subBtn) subBtn.style.display = 'none';
-    return;
-  }
-  
+  const onMsg = g('os-on-msg');
+  const offBtn = g('os-off-btn');
+
   if (!window._osReady) {
-    if (statusEl) { statusEl.textContent = '⏳ OneSignal load ho rahi hai...'; statusEl.style.color = 'var(--gold)'; }
-    if (subBtn) subBtn.style.display = 'none';
+    if(statusEl){ statusEl.textContent='⏳ Notification system load ho rahi hai...'; statusEl.style.color='var(--text3)'; }
+    if(subBtn) subBtn.style.display='none';
+    // Retry after 2 sec
+    setTimeout(updateOSUI, 2000);
     return;
   }
-  
-  // Check subscription status
-  if (window.OneSignalDeferred) {
-    window.OneSignalDeferred.push(async (OS) => {
-      const opted = await OS.User.PushSubscription.optedIn;
-      if (statusEl) {
-        statusEl.textContent = opted
-          ? '✅ Notifications ON — browser band ho tab bhi aayegi!'
-          : '⚠️ Subscribe karo neeche se';
-        statusEl.style.color = opted ? 'var(--green)' : 'var(--gold)';
+
+  // Check subscription
+  window.OneSignalDeferred.push(async (OS) => {
+    try {
+      const opted = OS.User?.PushSubscription?.optedIn || false;
+      if(statusEl){ 
+        statusEl.textContent = opted 
+          ? '✅ Notifications ON — har din reminder aayega!' 
+          : '🔔 Notifications enable karo — ek click mein!';
+        statusEl.style.color = opted ? 'var(--green)' : 'var(--text2)';
       }
-      if (subBtn) {
-        subBtn.style.display = 'block';
-        subBtn.textContent = opted ? '🔕 Notifications OFF Karo' : '🔔 Notifications Enable Karo';
-        subBtn.style.background = opted ? 'var(--rd)' : 'linear-gradient(135deg,var(--gold2),var(--gold))';
-        subBtn.style.color = opted ? 'var(--red)' : '#0d0f14';
-      }
-    });
-  }
+      if(subBtn) subBtn.style.display = opted ? 'none' : 'block';
+      if(onMsg)  onMsg.style.display  = opted ? 'block' : 'none';
+      if(offBtn) offBtn.style.display = opted ? 'block' : 'none';
+    } catch(e) {}
+  });
 }
 
 function osSubscribe() {
-  if (!window._osReady) {
-    toast('Pehle App ID save karo!', 'error');
-    return;
-  }
   window.OneSignalDeferred.push(async (OS) => {
-    const opted = await OS.User.PushSubscription.optedIn;
-    if (opted) {
+    try {
+      const granted = await OS.Notifications.requestPermission();
+      if(granted){
+        await OS.User.PushSubscription.optIn();
+        // Set user's schedule tags
+        try {
+          const s=S.settings||{};
+          OS.User.addTags({
+            morning_time: s.morningTime||'07:00',
+            evening_time: s.eveningTime||'21:00',
+            last_time: s.lastTime||'22:30',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata',
+            active: 'true'
+          });
+        } catch(_){}
+        toast('🔔 Notifications ON! Browser band pe bhi reminder aayega!','gold');
+        confetti();
+        setTimeout(updateOSUI, 600);
+      } else {
+        toast('Allow karo — browser settings mein notifications ON karo','error',5000);
+      }
+    } catch(e){ toast('Error: '+e.message,'error'); }
+  });
+}
+
+function osUnsubscribe() {
+  window.OneSignalDeferred.push(async (OS) => {
+    try {
       await OS.User.PushSubscription.optOut();
-      toast('🔕 Notifications OFF', 'error');
-    } else {
-      await OS.Notifications.requestPermission();
-      await OS.User.PushSubscription.optIn();
-      toast('🔔 Notifications ON! Browser band pe bhi aayegi!', 'success');
-      confetti();
-    }
-    setTimeout(updateOSUI, 500);
+      toast('🔕 Notifications band ho gayi','error');
+      setTimeout(updateOSUI, 600);
+    } catch(e){}
   });
 }
 
@@ -2782,6 +2730,7 @@ function schedulePracticeNotifications() {
 // Restore practice settings when settings screen opens
 function restorePracticeUI() {
   renderPracticeTimes();
+  updateOSUI();
   const days = JSON.parse(localStorage.getItem('dc_practice_days') || '[0,1,2,3,4,5,6]');
   document.querySelectorAll('.day-btn').forEach(btn => {
     const d = parseInt(btn.dataset.day);
