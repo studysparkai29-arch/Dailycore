@@ -25,9 +25,9 @@
       await OneSignal.init({
         appId: window.ONESIGNAL_APP_ID,
         notifyButton: { enable: false },
-        serviceWorkerParam: { scope: '/' },
-        // Handles safari + chrome
-        safari_web_id: window.ONESIGNAL_APP_ID,
+        // Scope must match the folder where OneSignalSDKWorker.js is hosted
+        serviceWorkerParam: { scope: '/Dailycore/' },
+        serviceWorkerPath: 'OneSignalSDKWorker.js',
       });
       window._osReady = true;
       window._oneSignal = OneSignal;
