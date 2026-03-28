@@ -18,7 +18,6 @@
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  // App ID hardcoded — users sirf "Enable" click karein
   window.ONESIGNAL_APP_ID = "0f032edc-8666-47ec-887b-0087ea8d5c6d";
   
   OneSignalDeferred.push(async function(OneSignal) {
@@ -26,12 +25,25 @@
       await OneSignal.init({
         appId: window.ONESIGNAL_APP_ID,
         notifyButton: { enable: false },
-        allowLocalhostAsSecureOrigin: false,
+        serviceWorkerParam: { scope: '/' },
+        // Handles safari + chrome
+        safari_web_id: window.ONESIGNAL_APP_ID,
       });
       window._osReady = true;
       window._oneSignal = OneSignal;
-      setTimeout(function(){ if(window._osUpdateUI) window._osUpdateUI(); }, 600);
-    } catch(err) { console.warn('OneSignal init error:', err); }
+      console.log('✅ OneSignal ready');
+      // Update UI
+      if(window._osUpdateUI) window._osUpdateUI();
+      // Auto-update permission status
+      OneSignal.Notifications.addEventListener('permissionChange', () => {
+        if(window._osUpdateUI) window._osUpdateUI();
+      });
+    } catch(err) {
+      console.warn('OneSignal init error:', err);
+      // Mark as failed so UI shows proper message
+      window._osFailed = true;
+      if(window._osUpdateUI) window._osUpdateUI();
+    }
   });
 </script>
 <style>
@@ -523,6 +535,13 @@ textarea.field{resize:none;min-height:68px}
 .pdf-sel:focus{outline:none;border-color:var(--gold)}
 .pdf-btn{width:100%;padding:14px;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;border-radius:var(--rs);color:white;font-family:'DM Sans',sans-serif;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s}
 .notif-hint{font-size:11px;color:var(--text3);line-height:1.5;padding:8px 12px;background:var(--bg3);border-radius:8px;margin-top:6px}
+.day-btn{padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text3);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
+.day-btn.active{background:var(--gl);border-color:var(--gold);color:var(--gold)}
+.pt-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.pt-item:last-child{border-bottom:none}
+.pt-time{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);min-width:55px}
+.pt-label{flex:1;font-size:13px;color:var(--text2)}
+.pt-del{background:var(--rd);border:none;border-radius:6px;color:var(--red);font-size:12px;font-weight:700;cursor:pointer;padding:4px 10px}
 
 /* ═══ PIN SETUP ═══ */
 .pin-setup-box{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:16px}
@@ -1236,57 +1255,44 @@ function init() {
 //  SERVICE WORKER
 // ═══════════════════════════════════════
 function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
-  // Inline SW via blob for zero server requirement
-  const CHART_URL='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
-  const JSPDF_URL='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-  const sw = `
-const C='dc-sw-v5';
-const SHELL=['./','./index.html'];
-const LIBS=['${CHART_URL}','${JSPDF_URL}'];
-self.addEventListener('install',e=>{
-  e.waitUntil(
-    caches.open(C).then(c=>{
-      // Cache shell first (required), then libs (optional — ignore failures)
-      return c.addAll(SHELL).catch(()=>{}).then(()=>
-        Promise.allSettled(LIBS.map(url=>fetch(url,{mode:'cors'}).then(r=>{if(r.ok)c.put(url,r);}).catch(()=>{})))
-      );
-    }).then(()=>self.skipWaiting())
-  );
-});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>clients.claim()))});
-self.addEventListener('fetch',e=>{
-  if(e.request.method!=='GET')return;
-  const isNav=e.request.mode==='navigate';
-  e.respondWith(caches.match(isNav?'./':e.request).then(c=>{
-    const n=fetch(e.request).then(r=>{
-      if(r&&r.status===200&&r.type!=='opaque'){const cl=r.clone();caches.open(C).then(ca=>{ca.put(e.request,cl);if(isNav)ca.put('./',cl.clone());});}
-      return r;
-    }).catch(()=>c);
-    return c||n;
-  }));
-});
-self.addEventListener('push',e=>{let d={title:'DailyCore 📔',body:'Aaj ki entry pending hai!'};try{d={...d,...e.data.json()};}catch(_){}e.waitUntil(self.registration.showNotification(d.title,{body:d.body,tag:'dc',renotify:true,vibrate:[100,50,100]}))});
-self.addEventListener('message',e=>{if(e.data?.type==='NOTIF')setTimeout(()=>self.registration.showNotification(e.data.title,{body:e.data.body,tag:'dc-r',renotify:true}),e.data.delay)});`;
-  try {
-    const blob = new Blob([sw],{type:'application/javascript'});
-    navigator.serviceWorker.register(URL.createObjectURL(blob),{scope:'./'}).then(reg => {
-      scheduleReminders(reg);
-    }).catch(() => {});
-  } catch(_) {}
+  // OneSignal SDK handles its own ServiceWorker (OneSignalSDKWorker.js)
+  // We do NOT register SW manually — that causes conflicts
+  // For scheduled in-tab reminders, we use direct setTimeout + Notification API
+  if ('Notification' in window && Notification.permission === 'granted') {
+    setTimeout(() => scheduleReminders(null), 500);
+  }
 }
 
+
 function scheduleReminders(reg) {
+  // In-tab reminders via setTimeout + Notification API
+  // Background push (browser closed) handled by OneSignal automatically
   if (Notification.permission !== 'granted') return;
   if (S.entries[todayKey()]) return;
-  const now = new Date(), st = S.settings;
-  [{t:st.morningTime||'07:00',title:'DailyCore 🌅',body:'Subah ka intention set karo — 2 min!'},{t:st.eveningTime||'21:00',title:'DailyCore 📝',body:'Aaj kaisa raha? Entry karo abhi.'},{t:st.lastTime||'22:30',title:'DailyCore ⚠️',body:'Last chance! Aaj bhi likhna — 2 min se kam mein ho jaayega! 🔗'}].forEach(({t,title,body}) => {
-    const [h,m] = t.split(':').map(Number);
-    const tgt = new Date(now); tgt.setHours(h,m,0,0);
+
+  const now = new Date(), st = S.settings||{};
+  const reminders = [
+    {t:st.morningTime||'07:00', title:'DailyCore 🌅', body:'Subah ka 2 min — aaj ki entry karo! 📔'},
+    {t:st.eveningTime||'21:00', title:'DailyCore 📝', body:'Aaj kaisa raha? Bas 2 min likhlo!'},
+    {t:st.lastTime||'22:30',    title:'DailyCore ⚠️', body:'Last chance — streak bachao! 🔥'},
+  ];
+
+  reminders.forEach(({t,title,body}) => {
+    const [hh,mm] = t.split(':').map(Number);
+    const tgt = new Date(now); tgt.setHours(hh,mm,0,0);
     const delay = tgt - now;
-    if (delay>0 && delay<86400000) {
-      if (reg?.active) reg.active.postMessage({type:'NOTIF',delay,title,body});
-      else setTimeout(()=>{ if(!S.entries[todayKey()]) new Notification(title,{body,tag:'dc-r',renotify:true}); }, delay);
+    if (delay > 60000 && delay < 86400000) {
+      // Direct timeout — works when tab is open/minimized
+      setTimeout(() => {
+        if (!S.entries[todayKey()] && Notification.permission === 'granted') {
+          try {
+            new Notification(title, {
+              body, tag: 'dc-daily', renotify: true,
+              icon: 'https://studysparkai29-arch.github.io/Dailycore/icon-192.png'
+            });
+          } catch(_) {}
+        }
+      }, delay);
     }
   });
 }
@@ -2428,8 +2434,24 @@ function importJSON(file) {
 //  PWA
 // ═══════════════════════════════════════
 function installPWA() {
-  if(_deferredInstall){_deferredInstall.prompt();_deferredInstall.userChoice.then(r=>{if(r.outcome==='accepted')toast('📱 App install ho gaya!','success');g('pwa-banner')?.classList.remove('show');_deferredInstall=null;});}
-  else showModal('📱','Home Screen pe Add Karo!','<strong>Chrome:</strong> ⋮ → "Add to Home screen"<br><strong>Safari:</strong> Share □↑ → "Add to Home Screen"');
+  if(_deferredInstall){
+    _deferredInstall.prompt();
+    _deferredInstall.userChoice.then(r=>{
+      if(r.outcome==='accepted') toast('📱 App install ho gaya!','success');
+      else toast('Next time install karna — "Add to Home Screen" option try karo','gold');
+      g('pwa-banner')?.classList.remove('show');
+      _deferredInstall=null;
+    });
+  } else {
+    // Desktop ya already installed — show clear instructions
+    const isAndroid=/Android/i.test(navigator.userAgent);
+    const isIOS=/iPad|iPhone|iPod/i.test(navigator.userAgent);
+    let msg='';
+    if(isAndroid) msg='Chrome mein: <strong>⋮ menu</strong> → <strong>"Add to Home screen"</strong>';
+    else if(isIOS) msg='Safari mein: <strong>Share ↑</strong> → <strong>"Add to Home Screen"</strong>';
+    else msg='Desktop Chrome mein: <strong>Address bar ke right side ⊕ icon</strong> click karo<br><br>Ya phir: <strong>⋮ menu → "Install DailyCore"</strong>';
+    showModal('📱','App Install Karo!', msg + '<br><br><span style="font-size:12px;color:var(--text3);">(Pehle app ko HTTPS pe open karo — GitHub Pages pe already hai ✅)</span>');
+  }
 }
 
 // ═══════════════════════════════════════
@@ -2437,23 +2459,26 @@ function installPWA() {
 //  OneSignal (browser band pe bhi) + fallback
 // ═══════════════════════════════════════
 function checkNotif() {
-  if('Notification' in window && Notification.permission==='default'){
-    const nbBanner=g('notif-banner'); if(nbBanner)nbBanner.style.display='flex';
+  window._osUpdateUI = updateOSUI; // so OneSignal can call it after init
+
+  if(!('Notification' in window)) return; // browser doesn't support
+
+  if(Notification.permission === 'granted'){
+    // Already granted — hide top banner, reschedule reminders
+    const nb = g('notif-banner'); if(nb) nb.style.display='none';
+    scheduleReminders(null);
+    schedulePracticeNotifications();
+  } else if(Notification.permission === 'default'){
+    // Not yet asked — show top banner
+    const nb = g('notif-banner'); if(nb) nb.style.display='flex';
   }
-  // Register global UI update fn so OneSignal init can call it
-  window._osUpdateUI = updateOSUI;
-  setTimeout(updateOSUI, 800);
+  // Update settings UI immediately (don't wait for OneSignal)
+  updateOSUI();
 }
 
 async function reqNotif() {
-  if(!('Notification' in window)) return;
-  const nbEl=g('notif-banner'); if(nbEl)nbEl.style.display='none';
-  if(window._osReady){
-    osSubscribe(); return;
-  }
-  const p=await Notification.requestPermission();
-  if(p==='granted'){ toast('🔔 Notifications ON!','success'); schedulePracticeNotifications(); }
-  else toast('Notifications block hain — Settings mein allow karo','error');
+  const nb = g('notif-banner'); if(nb) nb.style.display='none';
+  await osSubscribe(); // single unified flow
 }
 
 // ═══════════════════════════════════════
@@ -2559,70 +2584,95 @@ function addRipple(e) {
 
 function updateOSUI() {
   const statusEl = g('os-status');
-  const subBtn = g('os-sub-btn');
-  const onMsg = g('os-on-msg');
-  const offBtn = g('os-off-btn');
+  const subBtn   = g('os-sub-btn');
+  const onMsg    = g('os-on-msg');
+  const offBtn   = g('os-off-btn');
 
-  if (!window._osReady) {
-    if(statusEl){ statusEl.textContent='⏳ Notification system load ho rahi hai...'; statusEl.style.color='var(--text3)'; }
+  // Failed to init
+  if (window._osFailed) {
+    if(statusEl){ statusEl.textContent='⚠️ OneSignal error — page refresh karo'; statusEl.style.color='var(--red)'; }
     if(subBtn) subBtn.style.display='none';
-    // Retry after 2 sec
-    setTimeout(updateOSUI, 2000);
     return;
   }
 
-  // Check subscription
-  window.OneSignalDeferred.push(async (OS) => {
-    try {
-      const opted = OS.User?.PushSubscription?.optedIn || false;
-      if(statusEl){ 
-        statusEl.textContent = opted 
-          ? '✅ Notifications ON — har din reminder aayega!' 
-          : '🔔 Notifications enable karo — ek click mein!';
-        statusEl.style.color = opted ? 'var(--green)' : 'var(--text2)';
-      }
-      if(subBtn) subBtn.style.display = opted ? 'none' : 'block';
-      if(onMsg)  onMsg.style.display  = opted ? 'block' : 'none';
-      if(offBtn) offBtn.style.display = opted ? 'block' : 'none';
-    } catch(e) {}
-  });
+  // Not yet ready — show enable button anyway (browser permission can work without OneSignal)
+  if (!window._osReady) {
+    if(statusEl){ statusEl.textContent='🔔 Notifications enable karo — browser band pe bhi aayega!'; statusEl.style.color='var(--text2)'; }
+    if(subBtn){ subBtn.style.display='block'; subBtn.textContent='🔔 Notifications Enable Karo'; }
+    if(onMsg) onMsg.style.display='none';
+    if(offBtn) offBtn.style.display='none';
+    return;
+  }
+
+  // OneSignal ready — check actual subscription
+  try {
+    const opted = window._oneSignal?.User?.PushSubscription?.optedIn || false;
+    const permOk = Notification.permission === 'granted';
+    const isOn = opted && permOk;
+    if(statusEl){
+      statusEl.textContent = isOn
+        ? '✅ Notifications ON — browser band pe bhi aayega!'
+        : '🔔 Ek click mein enable karo — bilkul free!';
+      statusEl.style.color = isOn ? 'var(--green)' : 'var(--text2)';
+    }
+    if(subBtn) subBtn.style.display = isOn ? 'none' : 'block';
+    if(onMsg)  onMsg.style.display  = isOn ? 'block' : 'none';
+    if(offBtn) offBtn.style.display = isOn ? 'block' : 'none';
+  } catch(e) {
+    if(statusEl){ statusEl.textContent='🔔 Notifications enable karo'; statusEl.style.color='var(--text2)'; }
+    if(subBtn) subBtn.style.display='block';
+  }
 }
 
-function osSubscribe() {
-  window.OneSignalDeferred.push(async (OS) => {
+async function osSubscribe() {
+  // Step 1: Request browser permission
+  let perm = Notification.permission;
+  if (perm === 'default') {
+    perm = await Notification.requestPermission();
+  }
+  if (perm !== 'granted') {
+    toast('Browser ne block kiya — Settings > Site Permissions > Notifications > Allow karo', 'error', 6000);
+    return;
+  }
+
+  // Step 2: OneSignal subscribe (for background push)
+  if (window._osReady && window._oneSignal) {
     try {
-      const granted = await OS.Notifications.requestPermission();
-      if(granted){
-        await OS.User.PushSubscription.optIn();
-        // Set user's schedule tags
-        try {
-          const s=S.settings||{};
-          OS.User.addTags({
-            morning_time: s.morningTime||'07:00',
-            evening_time: s.eveningTime||'21:00',
-            last_time: s.lastTime||'22:30',
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Kolkata',
-            active: 'true'
-          });
-        } catch(_){}
-        toast('🔔 Notifications ON! Browser band pe bhi reminder aayega!','gold');
-        confetti();
-        setTimeout(updateOSUI, 600);
-      } else {
-        toast('Allow karo — browser settings mein notifications ON karo','error',5000);
-      }
-    } catch(e){ toast('Error: '+e.message,'error'); }
-  });
+      await window._oneSignal.User.PushSubscription.optIn();
+      // Tag user with schedule times for server-side scheduling
+      const s = S.settings || {};
+      window._oneSignal.User.addTags({
+        morning_time: s.morningTime || '07:00',
+        evening_time: s.eveningTime || '21:00',
+        last_time:    s.lastTime    || '22:30',
+        timezone:     Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata',
+        active: 'true'
+      });
+      toast('🔔 Notifications ON! Browser band pe bhi reminder aayega! 🎉', 'gold');
+      confetti();
+    } catch(e) {
+      // OneSignal failed but browser permission granted — still works when tab open
+      toast('🔔 Notifications ON! (Tab open rehne pe aayega)', 'success');
+    }
+  } else {
+    // OneSignal not ready — browser notifications only
+    toast('🔔 Notifications ON! App khula rehne pe reminder aayega', 'success');
+  }
+
+  // Step 3: Schedule in-tab reminders
+  scheduleReminders(null);
+  schedulePracticeNotifications();
+  setTimeout(updateOSUI, 500);
 }
 
-function osUnsubscribe() {
-  window.OneSignalDeferred.push(async (OS) => {
-    try {
-      await OS.User.PushSubscription.optOut();
-      toast('🔕 Notifications band ho gayi','error');
-      setTimeout(updateOSUI, 600);
-    } catch(e){}
-  });
+async function osUnsubscribe() {
+  try {
+    if (window._osReady && window._oneSignal) {
+      await window._oneSignal.User.PushSubscription.optOut();
+    }
+    toast('🔕 Notifications band ho gayi', 'error');
+    setTimeout(updateOSUI, 500);
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ─── PRACTICE SCHEDULE ────────────────
@@ -2693,36 +2743,35 @@ function savePracticeSettings() {
 }
 
 function schedulePracticeNotifications() {
-  // For browser-open notifications (SW based)
   const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
-  const days = JSON.parse(localStorage.getItem('dc_practice_days') || '[0,1,2,3,4,5,6]');
-  const msg = localStorage.getItem('dc_practice_msg') || '📚 Study time! Aaj ka session shuru karo 🎯';
-  
+  const days  = JSON.parse(localStorage.getItem('dc_practice_days') || '[0,1,2,3,4,5,6]');
+  const msg   = localStorage.getItem('dc_practice_msg') || '📚 Study time! Session shuru karo 🎯';
+
   if (!times.length) return;
-  if (Notification.permission !== 'granted') {
-    toast('Pehle notifications allow karo!', 'error');
-    reqNotif();
-    return;
-  }
-  
+  if (Notification.permission !== 'granted') { reqNotif(); return; }
+
   const now = new Date();
   const todayDow = (now.getDay() + 6) % 7; // 0=Mon
-  
+
   times.forEach(({ time, label }) => {
-    const [h2, mi] = time.split(':').map(Number);
-    const target = new Date(now);
-    target.setHours(h2, mi, 0, 0);
+    const [hh2, mm2] = time.split(':').map(Number);
+    const target = new Date(now); target.setHours(hh2, mm2, 0, 0);
     const delay = target - now;
-    
-    // Today — if time is in future and today is active day
-    if (delay > 0 && delay < 86400000 && days.includes(todayDow)) {
+
+    if (delay > 60000 && delay < 86400000 && days.includes(todayDow)) {
       const title = `📚 ${label}`;
-      const body = msg;
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'NOTIF', delay, title, body });
-      } else {
-        setTimeout(() => new Notification(title, { body, tag: `practice-${time}`, renotify: true, icon: '/favicon.ico' }), delay);
-      }
+      const body  = msg;
+      // Direct timeout — simple, reliable, no SW needed
+      setTimeout(() => {
+        if (Notification.permission === 'granted') {
+          try {
+            new Notification(title, {
+              body, tag: `practice-${time}`, renotify: true,
+              icon: 'https://studysparkai29-arch.github.io/Dailycore/icon-192.png'
+            });
+          } catch(_) {}
+        }
+      }, delay);
     }
   });
 }
@@ -2748,7 +2797,12 @@ function restorePracticeUI() {
 function initPracticeSchedule() {
   const times = JSON.parse(localStorage.getItem('dc_practice_times') || '[]');
   if (times.length && Notification.permission === 'granted') {
-    schedulePracticeNotifications();
+    // Small delay to let SW register first
+    setTimeout(schedulePracticeNotifications, 1500);
+  }
+  // Also reschedule diary reminders
+  if (Notification.permission === 'granted') {
+    setTimeout(() => scheduleReminders(null), 1000);
   }
 }
 
