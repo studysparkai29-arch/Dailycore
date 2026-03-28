@@ -2588,19 +2588,8 @@ function updateOSUI() {
   const onMsg    = g('os-on-msg');
   const offBtn   = g('os-off-btn');
 
-  // Failed to init
-  if (window._osFailed) {
-    if(window._osFailReason === 'local'){
-      if(statusEl){ 
-        statusEl.innerHTML='⚠️ <strong>Local file pe notifications kaam nahi karte</strong><br><span style="font-size:11px;">GitHub pe upload karo: <a href="https://studysparkai29-arch.github.io/Dailycore" target="_blank" style="color:var(--blue);">studysparkai29-arch.github.io/Dailycore</a></span>'; 
-        statusEl.style.color='var(--gold)'; 
-      }
-    } else {
-      if(statusEl){ statusEl.textContent='⚠️ OneSignal error — page refresh karo'; statusEl.style.color='var(--red)'; }
-    }
-    if(subBtn) subBtn.style.display='none';
-    return;
-  }
+  // OneSignal failed — but button still works via browser Notification API
+  // So we don't block the UI, just show the button
 
   // Not yet ready — show enable button (basic browser notifications still work)
   if (!window._osReady) {
@@ -2617,76 +2606,65 @@ function updateOSUI() {
     return;
   }
 
-  // OneSignal ready — check actual subscription
-  try {
-    const opted = window._oneSignal?.User?.PushSubscription?.optedIn || false;
-    const permOk = Notification.permission === 'granted';
-    const isOn = opted && permOk;
-    if(statusEl){
-      statusEl.textContent = isOn
-        ? '✅ Notifications ON — browser band pe bhi aayega!'
-        : '🔔 Ek click mein enable karo — bilkul free!';
-      statusEl.style.color = isOn ? 'var(--green)' : 'var(--text2)';
-    }
-    if(subBtn) subBtn.style.display = isOn ? 'none' : 'block';
-    if(onMsg)  onMsg.style.display  = isOn ? 'block' : 'none';
-    if(offBtn) offBtn.style.display = isOn ? 'block' : 'none';
-  } catch(e) {
-    if(statusEl){ statusEl.textContent='🔔 Notifications enable karo'; statusEl.style.color='var(--text2)'; }
-    if(subBtn) subBtn.style.display='block';
+  // Check if user has granted browser permission
+  const permOk = Notification.permission === 'granted';
+  const savedOn = localStorage.getItem('dc_notif') === '1';
+  const isOn = permOk && savedOn;
+
+  if(statusEl){
+    statusEl.textContent = isOn
+      ? '✅ Notifications ON — reminders aayenge!'
+      : '🔔 Ek click mein enable karo — bilkul free!';
+    statusEl.style.color = isOn ? 'var(--green)' : 'var(--text2)';
   }
+  if(subBtn) subBtn.style.display = isOn ? 'none' : 'block';
+  if(onMsg)  onMsg.style.display  = isOn ? 'block' : 'none';
+  if(offBtn) offBtn.style.display = isOn ? 'block' : 'none';
 }
 
 async function osSubscribe() {
-  // Step 1: Request browser permission
+  if (!('Notification' in window)) {
+    toast('Yeh browser notifications support nahi karta', 'error'); return;
+  }
   let perm = Notification.permission;
   if (perm === 'default') {
     perm = await Notification.requestPermission();
   }
-  if (perm !== 'granted') {
-    toast('Browser ne block kiya — Settings > Site Permissions > Notifications > Allow karo', 'error', 6000);
-    return;
-  }
-
-  // Step 2: OneSignal subscribe (for background push)
-  if (window._osReady && window._oneSignal) {
-    try {
-      await window._oneSignal.User.PushSubscription.optIn();
-      // Tag user with schedule times for server-side scheduling
-      const s = S.settings || {};
-      window._oneSignal.User.addTags({
-        morning_time: s.morningTime || '07:00',
-        evening_time: s.eveningTime || '21:00',
-        last_time:    s.lastTime    || '22:30',
-        timezone:     Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata',
-        active: 'true'
-      });
-      toast('🔔 Notifications ON! Browser band pe bhi reminder aayega! 🎉', 'gold');
-      confetti();
-    } catch(e) {
-      // OneSignal failed but browser permission granted — still works when tab open
-      toast('🔔 Notifications ON! (Tab open rehne pe aayega)', 'success');
+  if (perm === 'granted') {
+    localStorage.setItem('dc_notif', '1');
+    toast('🔔 Notifications ON! Reminders aayenge 🎉', 'gold');
+    confetti();
+    scheduleReminders(null);
+    schedulePracticeNotifications();
+    // Try OneSignal too (bonus if it works)
+    if (window._osReady && window._oneSignal) {
+      try {
+        await window._oneSignal.User.PushSubscription.optIn();
+        const s = S.settings || {};
+        window._oneSignal.User.addTags({
+          morning_time: s.morningTime || '07:00',
+          evening_time: s.eveningTime || '21:00',
+          last_time: s.lastTime || '22:30',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata',
+          active: 'true'
+        });
+      } catch(_) {}
     }
-  } else {
-    // OneSignal not ready — browser notifications only
-    toast('🔔 Notifications ON! App khula rehne pe reminder aayega', 'success');
+    setTimeout(updateOSUI, 300);
+  } else if (perm === 'denied') {
+    toast('Notifications blocked — address bar ka 🔒 icon click karo → Notifications → Allow', 'error', 7000);
   }
-
-  // Step 3: Schedule in-tab reminders
-  scheduleReminders(null);
-  schedulePracticeNotifications();
-  setTimeout(updateOSUI, 500);
 }
 
 async function osUnsubscribe() {
-  try {
-    if (window._osReady && window._oneSignal) {
-      await window._oneSignal.User.PushSubscription.optOut();
-    }
-    toast('🔕 Notifications band ho gayi', 'error');
-    setTimeout(updateOSUI, 500);
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  localStorage.removeItem('dc_notif');
+  if (window._osReady && window._oneSignal) {
+    try { await window._oneSignal.User.PushSubscription.optOut(); } catch(_) {}
+  }
+  toast('🔕 Notifications band ho gayi', 'error');
+  setTimeout(updateOSUI, 300);
 }
+
 
 // ─── PRACTICE SCHEDULE ────────────────
 function renderPracticeTimes() {
