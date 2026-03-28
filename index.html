@@ -25,9 +25,9 @@
       await OneSignal.init({
         appId: window.ONESIGNAL_APP_ID,
         notifyButton: { enable: false },
-        // Scope must match the folder where OneSignalSDKWorker.js is hosted
+        // GitHub Pages subfolder fix — worker is at /Dailycore/
         serviceWorkerParam: { scope: '/Dailycore/' },
-        serviceWorkerPath: 'OneSignalSDKWorker.js',
+        serviceWorkerPath: '/Dailycore/OneSignalSDKWorker.js',
       });
       window._osReady = true;
       window._oneSignal = OneSignal;
@@ -40,8 +40,8 @@
       });
     } catch(err) {
       console.warn('OneSignal init error:', err);
-      // Mark as failed so UI shows proper message
       window._osFailed = true;
+      window._osFailReason = location.protocol === 'file:' ? 'local' : 'error';
       if(window._osUpdateUI) window._osUpdateUI();
     }
   });
@@ -2590,15 +2590,28 @@ function updateOSUI() {
 
   // Failed to init
   if (window._osFailed) {
-    if(statusEl){ statusEl.textContent='⚠️ OneSignal error — page refresh karo'; statusEl.style.color='var(--red)'; }
+    if(window._osFailReason === 'local'){
+      if(statusEl){ 
+        statusEl.innerHTML='⚠️ <strong>Local file pe notifications kaam nahi karte</strong><br><span style="font-size:11px;">GitHub pe upload karo: <a href="https://studysparkai29-arch.github.io/Dailycore" target="_blank" style="color:var(--blue);">studysparkai29-arch.github.io/Dailycore</a></span>'; 
+        statusEl.style.color='var(--gold)'; 
+      }
+    } else {
+      if(statusEl){ statusEl.textContent='⚠️ OneSignal error — page refresh karo'; statusEl.style.color='var(--red)'; }
+    }
     if(subBtn) subBtn.style.display='none';
     return;
   }
 
-  // Not yet ready — show enable button anyway (browser permission can work without OneSignal)
+  // Not yet ready — show enable button (basic browser notifications still work)
   if (!window._osReady) {
-    if(statusEl){ statusEl.textContent='🔔 Notifications enable karo — browser band pe bhi aayega!'; statusEl.style.color='var(--text2)'; }
-    if(subBtn){ subBtn.style.display='block'; subBtn.textContent='🔔 Notifications Enable Karo'; }
+    const isLocal = location.protocol === 'file:';
+    if(statusEl){ 
+      statusEl.textContent = isLocal 
+        ? '⚠️ GitHub link se kholo: studysparkai29-arch.github.io/Dailycore'
+        : '🔔 Notifications enable karo — ek click mein!'; 
+      statusEl.style.color = isLocal ? 'var(--gold)' : 'var(--text2)'; 
+    }
+    if(subBtn){ subBtn.style.display = isLocal ? 'none' : 'block'; subBtn.textContent='🔔 Notifications Enable Karo'; }
     if(onMsg) onMsg.style.display='none';
     if(offBtn) offBtn.style.display='none';
     return;
